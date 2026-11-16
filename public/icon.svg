@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e2a5c"/><stop offset=".55" stop-color="#8d4f86"/><stop offset="1" stop-color="#e9837a"/></linearGradient>
+<radialGradient id="s" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff3cf"/><stop offset=".6" stop-color="#ffd58a"/><stop offset="1" stop-color="#ffd58a" stop-opacity="0"/></radialGradient></defs>
+<rect width="512" height="512" rx="112" fill="url(#g)"/>
+<circle cx="300" cy="270" r="150" fill="url(#s)" opacity=".9"/>
+<path d="M196 112q200 144 0 288" fill="none" stroke="#3b2238" stroke-width="30" stroke-linecap="round"/>
+<path d="M196 112q200 144 0 288" fill="none" stroke="#f2c24c" stroke-width="18" stroke-linecap="round"/>
+<path d="M196 112L150 256L196 400" fill="none" stroke="#fff8e6" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M118 256H392" stroke="#fff8e6" stroke-width="13" stroke-linecap="round"/>
+<path d="M418 256l-52-28v56z" fill="#d63a31"/>
+<path d="M118 256l-26-22M118 256l-26 22M140 256l-26-22M140 256l-26 22" stroke="#d63a31" stroke-width="10" stroke-linecap="round"/>
+</svg>
