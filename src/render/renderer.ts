@@ -6,13 +6,22 @@ import { BOW_TIERS, SPIRIT_ARROWS } from '../data/progression';
 import { type Realm, realmAt } from '../data/realms';
 import { BALANCE } from '../config';
 import { currentShot } from '../systems/aim';
+import { enemyArtHeight, bowHand, heroArrowTip, heroFrame, heroTurn, shieldShape } from '../systems/bodies';
 import { DECAL_LIFE, TEXT_LIFE } from '../systems/effects';
 import { bowTierIndex } from '../systems/rules';
 import type { Enemy, Game, Layout } from '../state/types';
 import { HERO_COLORS, INK } from './palette';
 import { tracePolygon, type Point } from './paint';
 import { OVERSCAN, type SceneAssets, paintPaper, paintScene, shoreline } from './scene';
+import { CharacterArt, enemyArtKey } from './characters';
 import { type Sprite, SpriteBank } from './sprites';
+
+/** Trail points at least `gap` behind the arrow tip at (x, y). */
+function trailBehind(trail: number[], x: number, y: number, gap: number): number[] {
+  let end = trail.length;
+  while (end >= 2 && Math.hypot((trail[end - 2] ?? x) - x, (trail[end - 1] ?? y) - y) < gap) end -= 2;
+  return trail.slice(0, end);
+}
 
 const BRUSH_FONT = '"Kaushan Script","Brush Script MT",cursive';
 
@@ -23,6 +32,7 @@ export class Renderer {
   private sceneLayoutKey = '';
   private sprites: SpriteBank;
   private paper: { grain: CanvasPattern | null; vignette: HTMLCanvasElement } | null = null;
+  readonly art = new CharacterArt();
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
@@ -200,6 +210,31 @@ export class Renderer {
     c.restore();
   }
 
+  /** A painted arrow whose tip is at (x, y). Returns false if the art is not loaded yet. */
+  private drawPaintedArrow(
+    key: string,
+    x: number,
+    y: number,
+    angle: number,
+    length: number,
+    dpr: number,
+    alpha = 1,
+  ): boolean {
+    const info = this.art.info(key);
+    if (!info) return false;
+    const thickness = (length * info.height) / info.width;
+    const image = this.art.get(key, thickness * dpr * 1.5);
+    if (!image) return false;
+    const c = this.ctx;
+    c.save();
+    c.globalAlpha = alpha;
+    c.translate(x, y);
+    c.rotate(angle);
+    c.drawImage(image, -length, -thickness / 2, length, thickness);
+    c.restore();
+    return true;
+  }
+
   private drawArrow(
     x: number,
     y: number,
@@ -320,6 +355,76 @@ export class Renderer {
   }
 
   private drawHero(game: Game): void {
+    if (!this.drawPaintedHero(game)) this.drawCodeHero(game);
+    this.drawHeroOverlays(game);
+  }
+
+  /** The painted hero: planted legs, and an upper body that turns to follow the aim. */
+  private drawPaintedHero(game: Game): boolean {
+    const L = game.layout;
+    const run = game.run;
+    const upper = this.art.get('hero-upper', heroFrame(L).height * L.dpr);
+    const lower = this.art.get('hero-lower', heroFrame(L).height * L.dpr);
+    const info = this.art.info('hero');
+    if (!upper || !lower || !info) return false;
+    const c = this.ctx;
+    const s = L.scale;
+    const f = heroFrame(L);
+    const breathe = Math.sin(game.time * 2) * 0.8 * s;
+    const shot = currentShot(game);
+    const aim = shot ? shot.angle : -0.04 + Math.sin(game.time * 1.1) * 0.03;
+    const turn = heroTurn(aim);
+    const recoil = Math.min(0, run.drawAmount) * 40 * s;
+    const hurt = run.hurtTime > 0 && game.phase === 'play' ? clamp(run.hurtTime / 0.35, 0, 1) : 0;
+    const hurtTint = hurt > 0 ? this.art.get('hero-lower', f.height * L.dpr, '#ff5a4a') : null;
+
+    // Soft shadow on the platform
+    c.fillStyle = rgba(INK, 0.3);
+    c.beginPath();
+    c.ellipse(L.archerX, f.top + f.height, f.width * 0.42, 5 * s, 0, 0, TAU);
+    c.fill();
+
+    c.drawImage(lower, f.left, f.top, f.width, f.height);
+    if (hurtTint) {
+      c.globalAlpha = hurt * 0.55;
+      c.drawImage(hurtTint, f.left, f.top, f.width, f.height);
+      c.globalAlpha = 1;
+    }
+
+    c.save();
+    c.translate(f.pivotX, f.pivotY + breathe);
+    c.rotate(turn);
+    c.translate(recoil, 0);
+    const ox = f.left - f.pivotX;
+    const oy = f.top - f.pivotY;
+    c.drawImage(upper, ox, oy, f.width, f.height);
+    if (hurt > 0) {
+      const tint = this.art.get('hero-upper', f.height * L.dpr, '#ff5a4a');
+      if (tint) {
+        c.globalAlpha = hurt * 0.55;
+        c.drawImage(tint, ox, oy, f.width, f.height);
+        c.globalAlpha = 1;
+      }
+    }
+    c.restore();
+
+    // Glows at the arrow tip: spirit arrow loaded, power shot charged.
+    const tip = heroArrowTip(L, aim);
+    if (run.reloadTimer <= 0.06 && game.phase === 'play') {
+      if (run.selectedSpirit) this.glowDot(tip.x, tip.y, 5 * s, SPIRIT_ARROWS[run.selectedSpirit].color, 0.9);
+      if (run.charge >= BALANCE.shot.powerShotHold) {
+        this.glowDot(tip.x, tip.y, (6 + Math.sin(game.time * 18) * 1.5) * s, [255, 240, 170], 1);
+      }
+    }
+    const spirit = run.spirit / 100;
+    if (spirit > 0.05 && game.phase === 'play') {
+      this.glowDot(tip.x - 24 * s, tip.y + 4 * s, (5 + spirit * 9) * s, [255, 222, 140], 0.12 + spirit * 0.4);
+    }
+    return true;
+  }
+
+  /** Fallback hero drawn in code, used until the painted art has loaded. */
+  private drawCodeHero(game: Game): void {
     const c = this.ctx;
     const L = game.layout;
     const run = game.run;
@@ -399,14 +504,29 @@ export class Renderer {
       if (run.charge >= BALANCE.shot.powerShotHold)
         this.glowDot(tx, ty, (6 + Math.sin(game.time * 18) * 1.5) * s, [255, 240, 170], 1);
     }
+  }
 
+  /** Shield bubble and trajectory preview, drawn over either hero. */
+  private drawHeroOverlays(game: Game): void {
+    const c = this.ctx;
+    const L = game.layout;
+    const run = game.run;
+    const s = L.scale;
+    const shot = currentShot(game);
+    const shield = shieldShape(L);
+    if (run.frost > 0 && game.phase === 'play') {
+      c.fillStyle = 'rgba(170,230,255,.2)';
+      c.beginPath();
+      c.ellipse(shield.cx, shield.cy, shield.rx * 0.6, shield.ry * 0.85, 0, 0, TAU);
+      c.fill();
+    }
     if (run.shieldTime > 0 && game.phase === 'play') {
       const fade = clamp(run.shieldTime / 0.3, 0, 1);
-      const r = 46 * s + Math.sin(game.time * 20) * 1.5 * s;
+      const pulse = Math.sin(game.time * 20) * 1.5 * s;
       c.strokeStyle = `rgba(170,225,255,${0.75 * fade})`;
       c.lineWidth = 3 * s;
       c.beginPath();
-      c.arc(ax, ay, r, 0, TAU);
+      c.ellipse(shield.cx, shield.cy, shield.rx + pulse, shield.ry + pulse, 0, 0, TAU);
       c.stroke();
       c.fillStyle = `rgba(170,225,255,${0.16 * fade})`;
       c.fill();
@@ -414,7 +534,7 @@ export class Renderer {
         c.strokeStyle = `rgba(255,240,180,${0.9 * fade})`;
         c.lineWidth = 2 * s;
         c.beginPath();
-        c.arc(ax, ay, r + 5 * s, 0, TAU);
+        c.ellipse(shield.cx, shield.cy, shield.rx + pulse + 5 * s, shield.ry + pulse + 5 * s, 0, 0, TAU);
         c.stroke();
       }
     }
@@ -425,8 +545,9 @@ export class Renderer {
       const v = (BALANCE.shot.minSpeed + BALANCE.shot.speedRange * shot.power) * s;
       const vx = Math.cos(shot.angle) * v;
       const vy = Math.sin(shot.angle) * v;
-      const ox = ax + Math.cos(shot.angle) * 20 * s;
-      const oy = ay + Math.sin(shot.angle) * 20 * s;
+      const origin = heroArrowTip(L, shot.angle);
+      const ox = origin.x;
+      const oy = origin.y;
       for (let i = 1; i <= 18; i++) {
         const t = i * 0.042;
         const x = ox + vx * t;
@@ -454,6 +575,115 @@ export class Renderer {
   }
 
   private drawEnemy(game: Game, e: Enemy): void {
+    if (!this.drawPaintedEnemy(game, e)) this.drawCodeEnemy(game, e);
+  }
+
+  /** A painted enemy, brought to life with sway, lunges, recoil and hit flashes. */
+  private drawPaintedEnemy(game: Game, e: Enemy): boolean {
+    const L = game.layout;
+    const s = L.scale;
+    const key = enemyArtKey(e, game.run.realm);
+    const info = this.art.info(key);
+    const height = enemyArtHeight(e, s);
+    const image = this.art.get(key, height * L.dpr);
+    if (!info || !image) return false;
+    const c = this.ctx;
+    const k = e.scale * s;
+    const width = (height * info.width) / info.height;
+    const accent = hexToRgb(e.accent);
+    const moving = e.state === 'walk';
+
+    let bob = 0;
+    let tilt = 0;
+    let stretch = 1;
+    if (e.kind === 'walker' || moving) {
+      bob = Math.abs(Math.sin(e.walkPhase)) * 3 * k;
+      tilt = Math.sin(e.walkPhase) * 0.035;
+    } else if (e.kind === 'rider') {
+      tilt = Math.sin(e.age * 2 + e.bobPhase) * 0.05;
+      stretch = 1 + Math.sin(e.age * 9) * 0.03;
+    } else {
+      stretch = 1 + Math.sin(e.age * 2 + e.bobPhase) * 0.012;
+      // Lean back while drawing the bow.
+      if (e.state === 'aim') tilt = 0.05 * (1 - e.aimRemaining / e.aimDuration);
+    }
+    let lungeX = 0;
+    if (e.lunge > 0) {
+      const p = Math.sin((e.lunge / 0.25) * Math.PI);
+      lungeX = -10 * k * p;
+      tilt -= 0.14 * p;
+    }
+    const x = e.x + e.knockback + lungeX;
+
+    c.globalAlpha = e.appear;
+    if (e.kind !== 'rider') {
+      c.fillStyle = rgba(INK, 0.28);
+      c.beginPath();
+      c.ellipse(e.x, e.y, width * 0.3, 4 * k, 0, 0, TAU);
+      c.fill();
+    }
+    c.save();
+    c.translate(x, e.y - bob);
+    c.rotate(tilt);
+    c.scale(1, stretch);
+    c.drawImage(image, -info.anchorX * width, -height, width, height);
+    if (e.flash > 0) {
+      const white = this.art.get(key, height * L.dpr, '#ffffff');
+      if (white) {
+        c.globalAlpha = Math.min(1, e.flash * 4) * e.appear;
+        c.drawImage(white, -info.anchorX * width, -height, width, height);
+      }
+    }
+    c.restore();
+    c.globalAlpha = 1;
+
+    if (e.state === 'aim' && e.kind !== 'walker') {
+      // Telegraph at the painted bow hand: a shrinking ring and a dashed line to the archer.
+      const hand = bowHand(e, s);
+      const f = e.aimRemaining / e.aimDuration;
+      const toArcher = Math.atan2(L.archerY - hand.y, L.archerX - hand.x);
+      c.strokeStyle = rgba(accent, 0.9 * (1 - f * 0.5));
+      c.lineWidth = 2.4 * s;
+      c.beginPath();
+      c.arc(hand.x, hand.y, lerp(7, 30, f) * k, 0, TAU);
+      c.stroke();
+      this.glowDot(hand.x, hand.y, (3 + 4 * (1 - f)) * s, accent, 0.9);
+      c.strokeStyle = rgba(accent, 0.5 * (1 - f));
+      c.lineWidth = 1.4 * s;
+      c.setLineDash([3 * s, 6 * s]);
+      c.beginPath();
+      c.moveTo(hand.x, hand.y);
+      c.lineTo(
+        hand.x + Math.cos(toArcher) * (1 - f) * 70 * s,
+        hand.y + Math.sin(toArcher) * (1 - f) * 70 * s,
+      );
+      c.stroke();
+      c.setLineDash([]);
+    }
+
+    if (e.hp < e.maxHp && e.kind !== 'boss') {
+      const w = 26 * k;
+      const fill = clamp(e.hp / e.maxHp, 0, 1);
+      const barY = e.y - height - 6 * k;
+      c.lineCap = 'round';
+      c.strokeStyle = 'rgba(20,14,40,.55)';
+      c.lineWidth = 3.4 * s;
+      c.beginPath();
+      c.moveTo(e.x - w / 2, barY);
+      c.lineTo(e.x + w / 2, barY);
+      c.stroke();
+      c.strokeStyle = rgba(accent, 1);
+      c.lineWidth = 2 * s;
+      c.beginPath();
+      c.moveTo(e.x - w / 2, barY);
+      c.lineTo(e.x - w / 2 + w * fill, barY);
+      c.stroke();
+    }
+    return true;
+  }
+
+  /** Fallback enemy drawn in code, used until the painted art has loaded. */
+  private drawCodeEnemy(game: Game, e: Enemy): void {
     const c = this.ctx;
     const L = game.layout;
     const s = L.scale;
@@ -615,26 +845,21 @@ export class Renderer {
           ? [255, 236, 150]
           : null;
       const bright = a.guided || tint !== null;
+      // The trail starts behind the painted arrow, so the shaft and feathers stay visible.
       if (a.stuck === null)
         this.drawTrail(
-          a.trail,
+          trailBehind(a.trail, a.x, a.y, 44 * s),
           tint ?? (a.guided ? [255, 225, 140] : [255, 248, 225]),
-          (bright ? 7 : 4.5) * s,
-          bright ? 0.85 : 0.6,
+          (bright ? 7 : 3.5) * s,
+          bright ? 0.85 : 0.4,
           s,
         );
       if (a.guided) this.glowDot(a.x, a.y, 5 * s, [255, 220, 130], 0.9);
       if (tint && a.stuck === null) this.glowDot(a.x, a.y, 4.5 * s, tint, 0.9);
-      this.drawArrow(
-        a.x,
-        a.y,
-        angle,
-        24 * s,
-        '#f6ecd2',
-        a.guided ? '#ffd76a' : '#e8b84a',
-        s,
-        a.stuck === null ? 1 : clamp(a.stuck, 0, 1),
-      );
+      const fade = a.stuck === null ? 1 : clamp(a.stuck, 0, 1);
+      if (!this.drawPaintedArrow('arrow-player', a.x, a.y, angle, 52 * s, game.layout.dpr, fade)) {
+        this.drawArrow(a.x, a.y, angle, 24 * s, '#f6ecd2', a.guided ? '#ffd76a' : '#e8b84a', s, fade);
+      }
     }
   }
 
@@ -647,7 +872,8 @@ export class Renderer {
       const color = hexToRgb(hex);
       // Shadow arrows are nearly invisible until close.
       const alpha = a.type === 'shadow' && Math.hypot(a.x - L.archerX, a.y - L.archerY) >= 150 * s ? 0.16 : 1;
-      this.drawTrail(a.trail, color, (a.type === 'homing' ? 6 : 4) * s, 0.7 * alpha, s);
+      const trail = a.type === 'homing' ? a.trail : trailBehind(a.trail, a.x, a.y, 36 * s);
+      this.drawTrail(trail, color, (a.type === 'homing' ? 6 : 4) * s, 0.7 * alpha, s);
       if (a.type !== 'shadow' || alpha === 1) {
         this.glowDot(
           a.x,
@@ -657,7 +883,12 @@ export class Renderer {
           0.85 * alpha,
         );
       }
-      if (a.type !== 'homing') this.drawArrow(a.x, a.y, angle, 20 * s, rgba(INK, 0.9), hex, s, alpha);
+      if (
+        a.type !== 'homing' &&
+        !this.drawPaintedArrow('arrow-enemy', a.x, a.y, angle, 44 * s, L.dpr, alpha)
+      ) {
+        this.drawArrow(a.x, a.y, angle, 20 * s, rgba(INK, 0.9), hex, s, alpha);
+      }
     }
   }
 

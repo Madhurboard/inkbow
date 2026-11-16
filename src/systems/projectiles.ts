@@ -14,6 +14,7 @@ import {
   interceptEnemyArrow,
   struckByEnemyArrow,
 } from './combat';
+import { bowHand, heroHitbox, insideShield } from './bodies';
 import { burst, floatText } from './effects';
 
 const PLAYER_TRAIL = 18;
@@ -35,8 +36,7 @@ export function launchEnemyArrow(
 ): void {
   const { layout, run } = game;
   const s = layout.scale;
-  const sx = enemy.x - 10 * s * enemy.scale;
-  const sy = bodyCenterY(game, enemy, 0.62);
+  const { x: sx, y: sy } = bowHand(enemy, s);
   const tx = layout.archerX + gaussian() * 20 * s;
   const ty = layout.archerY - 2 * s + gaussian() * 24 * s + (type === 'boom' ? 24 * s : 0);
   const dx = tx - sx;
@@ -239,10 +239,10 @@ export function updateEnemyArrows(game: Game, dt: number): void {
     arrow.trail.push(arrow.x, arrow.y);
     if (arrow.trail.length > ENEMY_TRAIL) arrow.trail.splice(0, 2);
 
-    const ex = (arrow.x - layout.archerX) / (15 * s);
-    const ey = (arrow.y - (layout.archerY - 4 * s)) / (34 * s);
-    const inShield =
-      run.shieldTime > 0 && (arrow.x - layout.archerX) ** 2 + (arrow.y - layout.archerY) ** 2 < (46 * s) ** 2;
+    const hitbox = heroHitbox(layout);
+    const ex = (arrow.x - hitbox.cx) / hitbox.rx;
+    const ey = (arrow.y - hitbox.cy) / hitbox.ry;
+    const inShield = run.shieldTime > 0 && insideShield(layout, arrow.x, arrow.y);
     if (inShield || ex * ex + ey * ey < 1) {
       arrow.dead = true;
       struckByEnemyArrow(game, arrow);

@@ -40,7 +40,7 @@ export function computeLayout(width: number, height: number, devicePixelRatio: n
     groundY,
     platformHeight,
     archerX,
-    archerY: groundY - platformHeight - 40 * scale,
+    archerY: groundY - platformHeight - 64 * scale,
     perches,
   };
 }

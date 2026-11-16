@@ -86,13 +86,13 @@ export interface BodySize {
 }
 
 export const BODY_SIZES: Record<BodyKey, BodySize> = {
-  archer: { width: 9, height: 50, headRadius: 5.5 },
-  sword: { width: 9, height: 48, headRadius: 5.5 },
-  sprinter: { width: 7, height: 46, headRadius: 5 },
-  brute: { width: 14, height: 52, headRadius: 6.5 },
-  giant: { width: 16, height: 58, headRadius: 7 },
-  rider: { width: 8, height: 34, headRadius: 5.5 },
-  boss: { width: 15, height: 72, headRadius: 7.5 },
+  archer: { width: 10, height: 58, headRadius: 5.5 },
+  sword: { width: 10, height: 58, headRadius: 5.5 },
+  sprinter: { width: 10, height: 46, headRadius: 5 },
+  brute: { width: 16, height: 60, headRadius: 6.5 },
+  giant: { width: 17, height: 60, headRadius: 7 },
+  rider: { width: 18, height: 44, headRadius: 5.5 },
+  boss: { width: 16, height: 76, headRadius: 7.5 },
 };
 
 /** Arrows a sky rider may carry, before and after wave 4. */

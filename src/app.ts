@@ -8,6 +8,7 @@ import { computeLayout } from './state/layout';
 import { browserStore, loadSave, writeSave } from './state/save';
 import type { Game, GameMode } from './state/types';
 import { beginAim, moveAim, releaseAim } from './systems/aim';
+import { heroArrowTip } from './systems/bodies';
 import { raiseShield, selectSpiritArrow, shoot, starfall } from './systems/combat';
 import { updateParticles } from './systems/effects';
 import { spawnEnemy } from './systems/enemies';
@@ -50,6 +51,7 @@ export function startApp(): void {
   const game: Game = createGame(save, ui, () => writeSave(store, game.save));
   const canvas = byId<HTMLCanvasElement>('c');
   const renderer = new Renderer(canvas);
+  void renderer.art.load();
   const hud = new Hud((text) => ui.hint(text), isDesktop);
 
   const begin = (mode: GameMode, realm: number) => {
@@ -231,6 +233,8 @@ export function startApp(): void {
         setRealm: (realm: number) => {
           game.run.realm = realm;
         },
+        aimOrigin: (angle: number) => heroArrowTip(game.layout, angle),
+        artReady: () => renderer.art.ready,
       },
     });
   }

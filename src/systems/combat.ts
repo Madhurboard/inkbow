@@ -6,6 +6,7 @@ import { gaussian, lerp } from '../core/math';
 import { ARROW_TYPES } from '../data/enemies';
 import { BOW_TIERS, SPIRIT_ARROWS } from '../data/progression';
 import type { ArrowTypeId, Enemy, EnemyArrow, Game, PlayerArrow, SpiritArrowId } from '../state/types';
+import { heroArrowTip } from './bodies';
 import { addDecal, burst, floatText, particle, ring, wisps } from './effects';
 import { addInk, addSpirit, addXp, breakCombo, bumpCombo, scoreMultiplier } from './rewards';
 import {
@@ -438,22 +439,16 @@ export function shoot(game: Game, angle: number, power: number, powerShot: boole
   const speed = (shot.minSpeed + shot.speedRange * power) * s * (gale ? 1.1 : 1);
   const damage =
     stats.damage * bowMultiplier(game) * (0.75 + power * 0.35) * (powerShot ? shot.powerShotDamage : 1);
+  const origin = heroArrowTip(layout, angle);
   for (let i = 0; i < count; i++) {
     const a = angle + (i - (count - 1) / 2) * shot.multishotSpread;
     game.arrows.push(
-      createPlayerArrow(
-        layout.archerX + Math.cos(a) * 20 * s,
-        layout.archerY + Math.sin(a) * 20 * s,
-        Math.cos(a) * speed,
-        Math.sin(a) * speed,
-        damage,
-        {
-          pierce: stats.pierce + (gale ? shot.galeExtraPierce : 0) + (powerShot ? 1 : 0),
-          ricochet: stats.ricochet,
-          special,
-          powerShot,
-        },
-      ),
+      createPlayerArrow(origin.x, origin.y, Math.cos(a) * speed, Math.sin(a) * speed, damage, {
+        pierce: stats.pierce + (gale ? shot.galeExtraPierce : 0) + (powerShot ? 1 : 0),
+        ricochet: stats.ricochet,
+        special,
+        powerShot,
+      }),
     );
   }
   sfx.shoot(power);

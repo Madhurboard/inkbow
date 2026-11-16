@@ -15,6 +15,7 @@ import {
 import { BOSS_SUMMONS, bossForRealm } from '../data/progression';
 import { BOSS_PERCH } from '../state/layout';
 import type { BodyKey, Enemy, Game, SpawnType } from '../state/types';
+import { ENEMY_ART_SCALE, enemyArtHeight } from './bodies';
 import { bodyCenterY, hurtPlayer, killEnemy } from './combat';
 import { addDecal, burst, floatText } from './effects';
 import { enemyFire, launchEnemyArrow } from './projectiles';
@@ -59,6 +60,38 @@ function blankEnemy(type: SpawnType, game: Game): Enemy {
   };
 }
 
+interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** Screen area a painted figure of `height` covers when standing at (x, y). */
+function footprint(x: number, y: number, height: number): Box {
+  return { left: x - height * 0.36, right: x + height * 0.36, top: y - height, bottom: y };
+}
+
+const overlaps = (a: Box, b: Box) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+/** A perch is usable if it is empty and a figure of `height` there would not overlap anyone perched nearby. */
+export function perchFits(game: Game, index: number, height: number, mover: Enemy | null): boolean {
+  const perch = game.layout.perches[index];
+  if (!perch || (perch.occupant && perch.occupant !== mover)) return false;
+  const box = footprint(perch.x, perch.y, height);
+  const s = game.layout.scale;
+  return !game.enemies.some(
+    (e) =>
+      e !== mover && !e.dead && e.perch !== null && overlaps(box, footprint(e.x, e.y, enemyArtHeight(e, s))),
+  );
+}
+
+function plannedHeight(type: 'archer' | 'boss', scale: number): number {
+  const factor = type === 'boss' ? BALANCE.enemies.bossScale : 1;
+  return BODY_SIZES[type].height * ENEMY_ART_SCALE * factor * scale;
+}
+
 function occupyPerch(game: Game, enemy: Enemy, index: number): void {
   const perch = game.layout.perches[index];
   if (!perch) return;
@@ -89,7 +122,7 @@ export function spawnEnemy(game: Game, type: SpawnType): Enemy {
     enemy.arrowType = type;
     enemy.accent = ARROW_TYPES[type].color;
     enemy.hp = BALANCE.enemies.archerHp * healthScale;
-    const free = allowedPerches(run.wave).filter((i) => !layout.perches[i]?.occupant);
+    const free = allowedPerches(run.wave).filter((i) => perchFits(game, i, plannedHeight('archer', s), null));
     if (free.length > 0 && Math.random() < 0.75) {
       occupyPerch(game, enemy, pick(free));
     } else {
@@ -117,10 +150,30 @@ export function spawnEnemy(game: Game, type: SpawnType): Enemy {
     enemy.hp = BALANCE.enemies.bossHp * healthScale;
     enemy.scale = BALANCE.enemies.bossScale;
     enemy.summonTimer = 6;
-    const squatter = layout.perches[BOSS_PERCH]?.occupant;
-    if (squatter) {
-      squatter.dead = true;
-      squatter.perch = null;
+    // Archers standing where the boss lands step aside, or vanish if there is nowhere to go.
+    const perch = layout.perches[BOSS_PERCH];
+    const bossBox = perch ? footprint(perch.x, perch.y, plannedHeight('boss', s)) : null;
+    for (const other of [...game.enemies]) {
+      if (other.perch === null || !bossBox) continue;
+      const inTheWay =
+        other.perch === BOSS_PERCH ||
+        overlaps(bossBox, footprint(other.x, other.y, enemyArtHeight(other, s)));
+      if (!inTheWay) continue;
+      const current = layout.perches[other.perch];
+      if (current) current.occupant = null;
+      const height = enemyArtHeight(other, s);
+      const refuge = allowedPerches(run.wave).filter((i) => {
+        const spot = layout.perches[i];
+        return (
+          i !== BOSS_PERCH && spot !== undefined && !overlaps(bossBox, footprint(spot.x, spot.y, height))
+        );
+      });
+      const free = refuge.filter((i) => perchFits(game, i, height, other));
+      if (free.length > 0) occupyPerch(game, other, pick(free));
+      else {
+        other.dead = true;
+        other.perch = null;
+      }
     }
     occupyPerch(game, enemy, BOSS_PERCH);
     game.ui.bossBar(boss.name);
@@ -156,7 +209,8 @@ export function relocateEnemy(
   choices: readonly number[] = allowedPerches(game.run.wave),
 ): void {
   const { layout } = game;
-  const free = choices.filter((i) => !layout.perches[i]?.occupant);
+  const height = enemyArtHeight(enemy, layout.scale);
+  const free = choices.filter((i) => i !== enemy.perch && perchFits(game, i, height, enemy));
   if (free.length === 0 || enemy.perch === null) return;
   const cy = bodyCenterY(game, enemy);
   burst(game, enemy.x, cy, enemy.accent, 12, 0.6);

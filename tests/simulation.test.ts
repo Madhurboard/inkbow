@@ -12,6 +12,7 @@ import {
 } from '../src/systems/combat';
 import { spawnEnemy } from '../src/systems/enemies';
 import { applyPerk, endRun, startRun, stepRun } from '../src/systems/run';
+import { enemyArtHeight, heroArrowTip } from '../src/systems/bodies';
 import { testGame } from './helpers';
 
 const FRAME = 1 / 60;
@@ -177,7 +178,7 @@ describe('bosses and progression', () => {
     expect(game.enemyArrows).toHaveLength(0);
   });
 
-  it('the boss takes the boss perch from any archer standing on it', () => {
+  it('archers in the way of the boss step aside', () => {
     const game = testGame();
     startRun(game, 'campaign', 1);
     game.run.wave = 5;
@@ -186,8 +187,9 @@ describe('bosses and progression', () => {
     archer.perch = 1;
     game.layout.perches[1]!.occupant = archer;
     const boss = spawnEnemy(game, 'boss');
-    expect(archer.dead).toBe(true);
+    expect(archer.perch).not.toBe(1);
     expect(game.layout.perches[1]?.occupant).toBe(boss);
+    expect(game.layout.perches.filter((p) => p.occupant === archer).length).toBe(archer.dead ? 0 : 1);
   });
 
   it('a level-up queues a perk, and applying one counts it', () => {
@@ -202,5 +204,45 @@ describe('bosses and progression', () => {
     expect(game.stats.multishot).toBe(2);
     expect(game.perkPicks.get('twinShot')).toBe(1);
     expect(game.run.pendingPerks).toBe(0);
+  });
+});
+
+describe('painted character layout', () => {
+  it('never puts two perched enemies where their figures overlap', () => {
+    for (let trial = 0; trial < 30; trial++) {
+      const game = testGame();
+      startRun(game, 'campaign', 1);
+      game.run.wave = 5;
+      for (const type of ['normal', 'fire', 'ice', 'fan'] as const) spawnEnemy(game, type);
+      spawnEnemy(game, 'boss');
+      for (const type of ['poison', 'homing'] as const) spawnEnemy(game, type);
+      const perched = game.enemies.filter((e) => !e.dead && e.perch !== null);
+      const s = game.layout.scale;
+      for (const a of perched) {
+        for (const b of perched) {
+          if (a === b) continue;
+          const ha = enemyArtHeight(a, s);
+          const hb = enemyArtHeight(b, s);
+          const apart =
+            a.x + ha * 0.36 <= b.x - hb * 0.36 ||
+            b.x + hb * 0.36 <= a.x - ha * 0.36 ||
+            a.y <= b.y - hb ||
+            b.y <= a.y - ha;
+          expect(apart).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('arrows leave from the painted bow and follow the aim', () => {
+    const game = testGame();
+    startRun(game, 'campaign', 1);
+    const level = heroArrowTip(game.layout, 0);
+    const up = heroArrowTip(game.layout, -0.6);
+    expect(level.x).toBeGreaterThan(game.layout.archerX);
+    expect(up.y).toBeLessThan(level.y);
+    shoot(game, -0.6, 1, false);
+    expect(game.arrows[0]?.x).toBeCloseTo(up.x);
+    expect(game.arrows[0]?.y).toBeCloseTo(up.y);
   });
 });
