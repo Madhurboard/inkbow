@@ -1,0 +1,109 @@
+{
+  "hero": {
+    "width": 519,
+    "height": 640,
+    "anchorX": 0.47,
+    "pivot": [0.52, 0.45],
+    "arrowTip": [0.99, 0.265]
+  },
+  "archer-normal": {
+    "width": 332,
+    "height": 420,
+    "anchorX": 0.578
+  },
+  "archer-fire": {
+    "width": 337,
+    "height": 420,
+    "anchorX": 0.564
+  },
+  "archer-poison": {
+    "width": 311,
+    "height": 420,
+    "anchorX": 0.581
+  },
+  "archer-ice": {
+    "width": 322,
+    "height": 420,
+    "anchorX": 0.564
+  },
+  "archer-boom": {
+    "width": 327,
+    "height": 420,
+    "anchorX": 0.552
+  },
+  "archer-homing": {
+    "width": 352,
+    "height": 420,
+    "anchorX": 0.532
+  },
+  "archer-fan": {
+    "width": 324,
+    "height": 420,
+    "anchorX": 0.596
+  },
+  "archer-shadow": {
+    "width": 364,
+    "height": 420,
+    "anchorX": 0.54
+  },
+  "walker-sword": {
+    "width": 323,
+    "height": 420,
+    "anchorX": 0.543
+  },
+  "walker-sprinter": {
+    "width": 458,
+    "height": 420,
+    "anchorX": 0.475
+  },
+  "walker-brute": {
+    "width": 341,
+    "height": 420,
+    "anchorX": 0.467
+  },
+  "walker-giant": {
+    "width": 459,
+    "height": 520,
+    "anchorX": 0.58
+  },
+  "rider": {
+    "width": 449,
+    "height": 420,
+    "anchorX": 0.572
+  },
+  "boss-hollow-king": {
+    "width": 461,
+    "height": 520,
+    "anchorX": 0.579
+  },
+  "boss-frost-warden": {
+    "width": 448,
+    "height": 520,
+    "anchorX": 0.588
+  },
+  "boss-ember-stag": {
+    "width": 432,
+    "height": 520,
+    "anchorX": 0.533
+  },
+  "boss-storm-caller": {
+    "width": 489,
+    "height": 520,
+    "anchorX": 0.524
+  },
+  "boss-void-monarch": {
+    "width": 447,
+    "height": 520,
+    "anchorX": 0.523
+  },
+  "arrow-player": {
+    "width": 290,
+    "height": 32,
+    "anchorX": 0.415
+  },
+  "arrow-enemy": {
+    "width": 209,
+    "height": 32,
+    "anchorX": 0.412
+  }
+}
